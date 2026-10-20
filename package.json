@@ -1,0 +1,22 @@
+{
+  "name": "autopilot-cfo",
+  "private": true,
+  "version": "0.2.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "test": "npm -w packages/guardrail run test && npm -w apps/server run test",
+    "typecheck": "npm -w packages/guardrail run typecheck && npm -w apps/server run typecheck",
+    "dev": "npm -w apps/server run dev",
+    "paypal:token": "npm -w apps/server run paypal:token",
+    "paypal:order": "npm -w apps/server run paypal:order",
+    "paypal:capture": "npm -w apps/server run paypal:capture --",
+    "paypal:payout": "npm -w apps/server run paypal:payout --",
+    "mandate:parse": "npm -w apps/server run mandate:parse --",
+    "llm:ping": "npm -w apps/server run llm:ping",
+    "demo:slice": "npm -w apps/server run demo:slice --",
+    "seller:demo": "npm -w apps/server run seller:demo --",
+    "negotiate:demo": "npm -w apps/server run negotiate:demo --",
+    "webhook:forged": "npm -w apps/server run webhook:forged"
+  },
+  "engines": { "node": ">=20" }
+}
