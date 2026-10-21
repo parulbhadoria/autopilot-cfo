@@ -16,6 +16,7 @@
     "demo:slice": "npm -w apps/server run demo:slice --",
     "seller:demo": "npm -w apps/server run seller:demo --",
     "negotiate:demo": "npm -w apps/server run negotiate:demo --",
+    "buyer:demo": "npm -w apps/server run buyer:demo --",
     "webhook:forged": "npm -w apps/server run webhook:forged"
   },
   "engines": { "node": ">=20" }
