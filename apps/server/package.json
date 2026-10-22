@@ -19,6 +19,7 @@
     "seller:demo": "tsx src/scripts/10-seller-demo.ts",
     "negotiate:demo": "tsx src/scripts/11-negotiate-demo.ts",
     "buyer:demo": "tsx src/scripts/12-llm-buyer-demo.ts",
+    "channel3:search": "tsx src/scripts/13-channel3-search.ts",
     "webhook:forged": "tsx src/scripts/07-forged-webhook.ts"
   },
   "dependencies": {

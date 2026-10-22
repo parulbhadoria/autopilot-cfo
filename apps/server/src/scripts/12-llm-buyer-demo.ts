@@ -1,9 +1,11 @@
 // Runs the negotiation with an LLM buyer (Groq, via tool calling) against the seller, then the policy gate.
-// Needs GROQ_API_KEY in .env. The model may behave a little differently on every run.
+// Needs GROQ_API_KEY in .env. If CHANNEL3_API_KEY is also set, the buyer can look up market prices.
+// The model may behave a little differently on every run.
 // Usage: npm run buyer:demo -- [sku] [quantity] [maxUnitPriceCents]
 //   e.g. npm run buyer:demo -- flour-25kg 2 4900
 import "../config.js"; // loads .env
 import { InMemoryLedger, MandateSchema, evaluatePolicy } from "@autopilot/guardrail";
+import { createChannel3FromEnv, createMarketLookup } from "../channel3/index.js";
 import { createToolChatFromEnv } from "../llm/index.js";
 import { createLlmBuyer, runNegotiation } from "../negotiation/index.js";
 import { Seller } from "../seller/seller.js";
@@ -20,6 +22,10 @@ if (!chat) {
   process.exit(1);
 }
 
+const channel3 = createChannel3FromEnv();
+const lookup = channel3 ? createMarketLookup(channel3) : undefined;
+console.log(lookup ? "Market price tool: ON (Channel3)" : "Market price tool: off (no CHANNEL3_API_KEY)");
+
 const vendor = { vendorId: "sunrise", name: "Sunrise Mills", payeeEmail: "vendor@example.com" };
 const result = await runNegotiation({
   seller: new Seller({ vendor }),
@@ -27,6 +33,13 @@ const result = await runNegotiation({
     chat,
     maxUnitPriceCents: maxUnit,
     businessContext: "Neighbourhood bakery restocking flour; wants the best price but needs reliable supply.",
+    market: lookup
+      ? async (q) => {
+          const s = await lookup(q);
+          console.log(`  [market_prices] "${s.query}" -> ${s.considered} listings found, ${s.count} relevant` + (s.count ? `, median ${money(s.medianCents).trim()}, min ${money(s.minCents).trim()}` : " (no comparable data)"));
+          return s;
+        }
+      : undefined,
   }),
   sku,
   quantity: qty,
