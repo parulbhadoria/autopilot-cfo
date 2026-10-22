@@ -1,13 +1,36 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import { MandateSchema, type Mandate, type SpendLedger, type Vendor } from "@autopilot/guardrail";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
+import type { MarketLookup } from "./channel3/market.js";
 import type { Llm } from "./llm/types.js";
 import { MandateParseError, parseMandate } from "./mandate/parser.js";
 import { approvePayment, rejectPayment, submitPayment } from "./payments/service.js";
+import { runPurchase, type PurchaseDeps } from "./pipeline/purchase.js";
+import { PurchaseStore } from "./purchases/store.js";
+import type { Seller } from "./seller/seller.js";
 import type { PaymentStore } from "./payments/store.js";
 import type { PayoutsClient } from "./paypal/payouts.js";
 import type { WebhookVerifier } from "./paypal/webhook.js";
 import { createWebhookRouter } from "./webhooks/router.js";
+
+/** Everything needed to let the API run whole purchases (shop, negotiate, gate, pay). */
+export interface PurchaseConfig {
+  seller: Seller;
+  makeBuyer: PurchaseDeps["makeBuyer"];
+  market?: MarketLookup;
+}
+
+const PurchaseBodySchema = z.object({
+  category: z.string().trim().min(1).max(60),
+  quantity: z.number().int().min(1).max(10_000),
+  maxUnitPriceCents: z.number().int().positive().max(100_000_000).optional(),
+});
+
+const noLlm: Llm = {
+  complete: async () => {
+    throw new Error("LLM not configured");
+  },
+};
 
 export interface AppDeps {
   ledger: SpendLedger;
@@ -18,6 +41,9 @@ export interface AppDeps {
   adminApiKey?: string;
   hardMaxWeeklyCents?: number;
   mandate?: Mandate;
+  /** Enables POST /api/purchase. */
+  purchase?: PurchaseConfig;
+  purchases?: PurchaseStore;
 }
 
 const wrap =
@@ -29,6 +55,7 @@ export function createApp(deps: AppDeps) {
   const app = express();
   let mandate: Mandate | null = deps.mandate ?? null;
   const payDeps = { ledger: deps.ledger, store: deps.store, payouts: deps.payouts };
+  const purchases = deps.purchases ?? new PurchaseStore();
 
   // Webhook route comes BEFORE express.json: signature verification needs the raw body.
   app.use("/webhooks/paypal", createWebhookRouter({ store: deps.store, ledger: deps.ledger, verify: deps.verifyWebhook }));
@@ -49,11 +76,17 @@ export function createApp(deps: AppDeps) {
     "/mandate/parse",
     wrap(async (req, res) => {
       if (!deps.llm) return res.status(501).json({ error: "LLM not configured" });
-      const vendors: Vendor[] = Array.isArray(req.body?.vendors) ? req.body.vendors : [];
+      // When purchasing is configured, the vendor and its categories come from the server, not the client.
+      const vendors: Vendor[] = Array.isArray(req.body?.vendors)
+        ? req.body.vendors
+        : deps.purchase
+          ? [deps.purchase.seller.vendor]
+          : [];
       const out = await parseMandate(String(req.body?.text ?? ""), {
         llm: deps.llm,
         vendors,
         hardMaxWeeklyCents: deps.hardMaxWeeklyCents ?? 500_000,
+        knownCategories: deps.purchase ? [...new Set(deps.purchase.seller.listProducts().map((p) => p.category))] : undefined,
       });
       res.json(out);
     }),
@@ -89,6 +122,33 @@ export function createApp(deps: AppDeps) {
     }),
   );
   api.post("/payments/:id/reject", (req, res) => res.json(rejectPayment(payDeps, req.params.id)));
+
+  // Shop -> negotiate -> policy gate -> pay, using the owner's active mandate.
+  api.post(
+    "/purchase",
+    wrap(async (req, res) => {
+      if (!deps.purchase) return res.status(501).json({ error: "Purchasing is not configured" });
+      if (!mandate) return res.status(409).json({ error: "No active mandate. PUT /api/mandate first." });
+      const need = PurchaseBodySchema.parse(req.body);
+      const result = await runPurchase(
+        {
+          llm: deps.llm ?? noLlm,
+          seller: deps.purchase.seller,
+          payments: payDeps,
+          makeBuyer: deps.purchase.makeBuyer,
+          market: deps.purchase.market,
+          hardMaxWeeklyCents: deps.hardMaxWeeklyCents ?? 500_000,
+        },
+        { ownerText: mandate.ownerNote ?? "", need, parsedMandate: { mandate, assumptions: [] } },
+      );
+      res.json(purchases.create(need, result));
+    }),
+  );
+  api.get("/purchases", (_req, res) => res.json({ purchases: purchases.list() }));
+  api.get("/purchases/:id", (req, res) => {
+    const run = purchases.get(req.params.id);
+    return run ? res.json(run) : res.status(404).json({ error: "not found" });
+  });
 
   app.use("/api", api);
 
