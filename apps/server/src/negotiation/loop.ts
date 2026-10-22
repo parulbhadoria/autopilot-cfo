@@ -9,6 +9,7 @@ export type Outcome =
   | "seller_walked_away"
   | "no_agreement"
   | "quote_expired"
+  | "invoice_mismatch"
   | "invalid_buyer_decision";
 
 export interface NegotiationOptions {
@@ -78,8 +79,30 @@ export async function runNegotiation(o: NegotiationOptions): Promise<Negotiation
     transcript,
     deal,
   });
-  const agreed = () =>
-    end("deal", session.toDeal({ dealId: o.dealId ?? `deal_${randomUUID()}`, negotiationId }));
+    /**
+   * The vendor's invoice must match what was agreed in the transcript. A vendor that raises the price or
+   * adds fees after saying yes is caught here, before anything reaches the payment step.
+   */
+  const agreed = () => {
+    const invoice = session.toDeal({ dealId: o.dealId ?? `deal_${randomUUID()}`, negotiationId });
+    const accepted = [...transcript].reverse().find((e) => e.from === "seller" && e.type === "accept");
+    if (
+      !accepted ||
+      invoice.unitPriceCents !== accepted.unitPriceCents ||
+      invoice.totalCents !== accepted.totalCents ||
+      invoice.quantity !== o.quantity
+    ) {
+      push({
+        from: "buyer",
+        type: "reject",
+        unitPriceCents: invoice.unitPriceCents,
+        totalCents: invoice.totalCents,
+        reasoning: `Invoice (${invoice.unitPriceCents}/unit, total ${invoice.totalCents}) does not match the agreed terms (${accepted?.unitPriceCents}/unit, total ${accepted?.totalCents}). Refusing to pay.`,
+      });
+      return end("invoice_mismatch");
+    }
+    return end("deal", invoice);
+  };
 
   push({ from: "seller", type: "open", ...terms(session.currentAskCents), expiresAt, message: "Opening price." });
 

@@ -72,6 +72,19 @@ export const DEFAULT_CATALOG: Product[] = [
     freeShippingOverCents: 10_000,
     stock: 100,
   },
+    {
+    sku: "sheet-pan-half",
+    name: "Aluminum half-size sheet pan, 18 x 13 in",
+    category: "sheet pans",
+    listUnitPriceCents: 3_000,
+    floorUnitPriceCents: 2_100,
+    bulkTiers: [
+      { minQty: 8, discountPct: 5 },
+      { minQty: 20, discountPct: 10 },
+    ],
+    shippingCents: 0,
+    stock: 500,
+  },
   {
     sku: "sugar-25kg",
     name: "Caster sugar, 25 kg sack",

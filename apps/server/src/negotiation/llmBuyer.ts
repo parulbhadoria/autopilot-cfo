@@ -74,7 +74,7 @@ export const MARKET_TOOL: ToolDef = {
       "Read-only. Looks up current online retail prices for a similar product across merchants, to judge whether the seller's ask is fair. Returns price statistics only (min, median, max, cheapest merchants), in cents, for relevant new in-stock listings. count 0 means no comparable listings were found, so rely on the negotiation instead.",
     parameters: {
       type: "object",
-      properties: { query: { type: "string", description: 'Short product description, e.g. "bread flour 25kg"' } },
+      properties: { query: { type: "string", description: 'Short generic product name in 2 to 3 plain words, e.g. "baking sheet pan". Avoid sizes and brands.' } },
       required: ["query"],
     },
   },

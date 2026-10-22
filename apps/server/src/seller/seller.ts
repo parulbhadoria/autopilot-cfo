@@ -71,7 +71,12 @@ export class Seller {
     if (!product) throw new Error(`Unknown sku "${sku}"`);
     if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Quantity must be a positive integer");
     if (quantity > product.stock) throw new Error(`Only ${product.stock} of ${sku} in stock`);
-    return new SellerSession(this.vendor, this.currency, product, quantity, this.#opts, this.#now);
+    return this.wrapSession(new SellerSession(this.vendor, this.currency, product, quantity, this.#opts, this.#now));
+  }
+
+  /** Extension point used by the test-only malicious seller. The honest seller returns the session unchanged. */
+  protected wrapSession(session: SellerSession): SellerSession {
+    return session;
   }
 }
 
