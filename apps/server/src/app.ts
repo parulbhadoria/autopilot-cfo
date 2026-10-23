@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { MandateSchema, type Mandate, type SpendLedger, type Vendor } from "@autopilot/guardrail";
 import { ZodError, z } from "zod";
@@ -44,6 +45,8 @@ export interface AppDeps {
   /** Enables POST /api/purchase. */
   purchase?: PurchaseConfig;
   purchases?: PurchaseStore;
+  /** Folder with the built web UI (apps/web/dist). When set, the server also serves the UI. */
+  staticDir?: string;
 }
 
 const wrap =
@@ -151,6 +154,13 @@ export function createApp(deps: AppDeps) {
   });
 
   app.use("/api", api);
+  
+  if (deps.staticDir) {
+    const dir = resolve(deps.staticDir);
+    app.use(express.static(dir));
+    // Single-page app: any other GET (not API, webhooks or health) gets index.html.
+    app.get(/^\/(?!api\/|webhooks\/|health$).*/, (_req, res) => res.sendFile(resolve(dir, "index.html")));
+  }
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ZodError) return res.status(400).json({ error: "validation", issues: err.issues });

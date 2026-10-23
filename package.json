@@ -3,9 +3,16 @@
   "private": true,
   "version": "0.2.0",
   "workspaces": ["apps/*", "packages/*"],
+  "devDependencies": {
+  "concurrently": "^9.0.1"
+  },
   "scripts": {
-    "test": "npm -w packages/guardrail run test && npm -w apps/server run test",
-    "typecheck": "npm -w packages/guardrail run typecheck && npm -w apps/server run typecheck",
+    "test": "npm -w packages/guardrail run test && npm -w apps/server run test && npm -w apps/web run test",
+    "typecheck": "npm -w packages/guardrail run typecheck && npm -w apps/server run typecheck && npm -w apps/web run typecheck",
+    "start": "npm -w apps/server run start",
+    "dev:web": "npm -w apps/web run dev",
+    "build:web": "npm -w apps/web run build",
+    "dev:all": "concurrently -n server,web -c blue,green \"npm:dev\" \"npm:dev:web\"",
     "dev": "npm -w apps/server run dev",
     "paypal:token": "npm -w apps/server run paypal:token",
     "paypal:order": "npm -w apps/server run paypal:order",

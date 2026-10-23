@@ -131,3 +131,38 @@ describe("auth", () => {
     expect((await buy(app, { category: "sheet pans", quantity: 4 }, { "x-api-key": "secret" })).status).toBe(200);
   });
 });
+
+describe("serving the web UI", () => {
+  it("serves index.html and static files, keeps /api and /health working, and falls back to index.html for app routes", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "web-"));
+    writeFileSync(join(dir, "index.html"), "<html><body>APP SHELL</body></html>");
+    writeFileSync(join(dir, "hello.txt"), "static file");
+
+    const app = createApp({
+      ledger: new InMemoryLedger(),
+      store: new PaymentStore(),
+      payouts: { createPayout: async () => ({ payoutBatchId: "B", batchStatus: "PENDING" }) },
+      verifyWebhook: async () => true,
+      staticDir: dir,
+    });
+    expect((await request(app).get("/")).text).toContain("APP SHELL");
+    expect((await request(app).get("/hello.txt")).text).toBe("static file");
+    expect((await request(app).get("/some/client/route")).text).toContain("APP SHELL");
+    expect((await request(app).get("/health")).body).toEqual({ ok: true, mandateSet: false });
+    expect((await request(app).get("/api/mandate")).body).toEqual({ mandate: null });
+    expect((await request(app).get("/api/does-not-exist")).text).not.toContain("APP SHELL");
+  });
+
+  it("does not serve anything extra when no UI is configured", async () => {
+    const app = createApp({
+      ledger: new InMemoryLedger(),
+      store: new PaymentStore(),
+      payouts: { createPayout: async () => ({ payoutBatchId: "B", batchStatus: "PENDING" }) },
+      verifyWebhook: async () => true,
+    });
+    expect((await request(app).get("/")).status).toBe(404);
+  });
+});
