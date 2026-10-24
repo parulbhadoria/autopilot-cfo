@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { createApi } from "./api";
 import { MandateScreen } from "./components/MandateScreen";
+import { PurchaseScreen } from "./components/PurchaseScreen";
+
+// AG Grid is large, so the ledger loads only when its tab is opened.
+const LedgerScreen = lazy(() => import("./components/LedgerScreen").then((m) => ({ default: m.LedgerScreen })));
 
 const KEY_STORAGE = "autopilot-api-key";
+type Tab = "mandate" | "purchase" | "ledger";
 
 function readKey(): string {
   try {
@@ -15,6 +20,7 @@ function readKey(): string {
 export default function App() {
   const [apiKey, setApiKey] = useState(readKey);
   const [online, setOnline] = useState<boolean | null>(null);
+  const [tab, setTab] = useState<Tab>("mandate");
 
   const api = useMemo(() => createApi({ getApiKey: () => (apiKey.trim() ? apiKey.trim() : undefined) }), [apiKey]);
 
@@ -37,6 +43,12 @@ export default function App() {
     };
   }, [api]);
 
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "mandate", label: "Mandate" },
+    { id: "purchase", label: "Buy" },
+    { id: "ledger", label: "Ledger" },
+  ];
+
   return (
     <div className="app">
       <header className="topbar">
@@ -54,13 +66,27 @@ export default function App() {
       </header>
 
       <nav className="tabs" aria-label="Sections">
-        <button type="button" className="tab active" aria-current="page">
-          Mandate
-        </button>
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`tab ${tab === t.id ? "active" : ""}`}
+            aria-current={tab === t.id ? "page" : undefined}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
       </nav>
 
       <main>
-        <MandateScreen api={api} />
+        {tab === "mandate" && <MandateScreen api={api} />}
+        {tab === "purchase" && <PurchaseScreen api={api} />}
+        {tab === "ledger" && (
+          <Suspense fallback={<p className="muted">Loading the ledger...</p>}>
+            <LedgerScreen api={api} />
+          </Suspense>
+        )}
       </main>
     </div>
   );

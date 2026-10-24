@@ -80,3 +80,13 @@ textarea:focus, input:focus, button:focus-visible { outline: 2px solid var(--acc
 details { margin-top: 12px; }
 pre { overflow-x: auto; background: var(--bg); padding: 12px; border-radius: 8px; font-size: 0.8rem; }
 @media (max-width: 560px) { .topbar-right { align-items: flex-start; } }
+
+/* Day 17: audit ledger (AG Grid) */
+.card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.row.tight { margin-top: 0; }
+.grid-wrap { width: 100%; margin-top: 12px; }
+.grid-wrap.tall { height: 340px; }
+.cell-ok { color: var(--ok-text); font-weight: 600; }
+.cell-warn { color: var(--warn-text); font-weight: 600; }
+.cell-bad { color: var(--bad-text); font-weight: 600; }
+.cell-agent { color: var(--accent); font-weight: 600; }
