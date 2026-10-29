@@ -1,4 +1,4 @@
-import type { TranscriptEntry } from "../types";
+import type { PurchaseResult, TranscriptEntry } from "../types";
 
 /** Plain-English label for each negotiation step, so the owner doesn't need to read protocol terms. */
 export function describeStep(e: TranscriptEntry): string {
@@ -34,6 +34,8 @@ export const OUTCOME_TEXT: Record<string, { tone: "ok" | "warn" | "bad" | "info"
   payment_denied: { tone: "bad", text: "Blocked by your rules. No money moved." },
   payment_failed: { tone: "bad", text: "The payment could not be sent. No money moved." },
   rejected_by_owner: { tone: "info", text: "You rejected this order. No money moved." },
+  payment_reversed: { tone: "info", text: "This payment was cancelled or refunded. The money is back with you." },
+  payment_unknown: { tone: "warn", text: "PayPal has not confirmed this payment yet. Check its status." },
   invoice_mismatch: { tone: "bad", text: "The vendor's invoice did not match what was agreed. Nothing was paid." },
   no_deal: { tone: "info", text: "No deal. The agent could not agree a price within its limit." },
   category_not_authorized: { tone: "bad", text: "Your rules do not allow buying this item." },
@@ -43,4 +45,30 @@ export const OUTCOME_TEXT: Record<string, { tone: "ok" | "warn" | "bad" | "info"
 
 export function outcomeInfo(outcome: string) {
   return OUTCOME_TEXT[outcome] ?? { tone: "info" as const, text: outcome };
+}
+
+/**
+ * What actually happened to this order, from the payment's current status. The server stores the outcome as it
+ * was when the order was placed, but the payment can change afterwards (approved, cancelled, refunded).
+ */
+export function effectiveOutcome(r: PurchaseResult): string {
+  const status = r.payment?.status;
+  switch (status) {
+    case undefined:
+      return r.outcome;
+    case "PENDING_APPROVAL":
+      return "awaiting_approval";
+    case "REJECTED":
+      return "rejected_by_owner";
+    case "DENIED":
+      return "payment_denied";
+    case "FAILED":
+      return "payment_failed";
+    case "REVERSED":
+      return "payment_reversed";
+    case "UNKNOWN":
+      return "payment_unknown";
+    default:
+      return "payment_started"; // PROCESSING, SUCCESS
+  }
 }

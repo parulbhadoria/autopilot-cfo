@@ -61,6 +61,10 @@ export function createApi(o: ApiOptions = {}) {
     listPayments: () => request<{ payments: PaymentRecord[] }>("GET", "/api/payments"),
     approvePayment: (id: string) => request<PaymentRecord>("POST", `/api/payments/${id}/approve`),
     rejectPayment: (id: string) => request<PaymentRecord>("POST", `/api/payments/${id}/reject`),
+    syncPayment: (id: string) => request<PaymentRecord>("POST", `/api/payments/${id}/sync`),
+    cancelPayment: (id: string) => request<PaymentRecord>("POST", `/api/payments/${id}/cancel`),
+    requestRefund: (id: string, reason?: string) => request<PaymentRecord>("POST", `/api/payments/${id}/refund-request`, { reason }),
+    refundReceived: (id: string) => request<PaymentRecord>("POST", `/api/payments/${id}/refund-received`),
   };
 }
 

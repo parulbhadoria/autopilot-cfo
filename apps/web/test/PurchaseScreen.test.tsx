@@ -134,6 +134,30 @@ describe("PurchaseScreen", () => {
     expect((await screen.findAllByText(/You rejected this order/i)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Paid automatically/i)).not.toBeInTheDocument();
   });
+    it("shows payment actions under a paid order and updates the screen from PayPal's answer", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({
+      syncPayment: vi.fn().mockResolvedValue({ ...run().result.payment!, status: "SUCCESS", payoutBatchId: "B1", payoutItemStatus: "SUCCESS" }),
+    });
+    (api.purchase as any).mockResolvedValue({ ...run(), result: { ...run().result, payment: { ...run().result.payment!, payoutBatchId: "B1" } } });
+    render(<PurchaseScreen api={api} />);
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(await screen.findByRole("button", { name: /check paypal status/i }));
+    await waitFor(() => expect(api.syncPayment).toHaveBeenCalledWith("pay_1"));
+    expect(await screen.findByRole("button", { name: /request refund from vendor/i })).toBeInTheDocument();
+    expect(screen.getByText(/PayPal says: success/i)).toBeInTheDocument();
+  });
+
+  it("a cancelled order is reported as money returned, in the banner and the history", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({ cancelPayment: vi.fn().mockResolvedValue({ ...run().result.payment!, status: "REVERSED", payoutBatchId: "B1", payoutItemStatus: "RETURNED" }) });
+    (api.purchase as any).mockResolvedValue({ ...run(), result: { ...run().result, payment: { ...run().result.payment!, payoutBatchId: "B1", payoutItemStatus: "UNCLAIMED", payoutBatchStatus: "SUCCESS" } } });
+    render(<PurchaseScreen api={api} />);
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(await screen.findByRole("button", { name: /cancel payout and return my money/i }));
+    expect((await screen.findAllByText(/cancelled or refunded/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Paid automatically/i)).not.toBeInTheDocument();
+  });
 
   it("shows a clear message when the purchase fails", async () => {
     const user = userEvent.setup();

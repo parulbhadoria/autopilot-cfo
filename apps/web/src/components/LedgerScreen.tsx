@@ -46,6 +46,8 @@ const negotiationCols: ColDef<NegotiationRow>[] = [
   { headerName: "Saved", field: "savedCents", valueFormatter: money, width: 100, type: "numericColumn" },
   { headerName: "Market median", field: "marketMedianCents", valueFormatter: money, width: 140, type: "numericColumn" },
   { headerName: "Payment", field: "paymentStatus", width: 150, valueFormatter: (p) => (p.value ? String(p.value).replace(/_/g, " ").toLowerCase() : "") },
+  { headerName: "PayPal says", field: "payoutItemStatus", width: 130 },
+  { headerName: "Refund", field: "refundState", width: 110 },
   { headerName: "Amount", field: "amountCents", valueFormatter: money, width: 110, type: "numericColumn" },
   { headerName: "Checks passed", valueGetter: (p) => (p.data && p.data.checksTotal ? `${p.data.checksPassed}/${p.data.checksTotal}` : ""), width: 140 },
   { headerName: "Stopped by", field: "blockedBy", width: 190 },
@@ -170,6 +172,10 @@ export function LedgerScreen({ api, pollMs = 8000 }: { api: Api; pollMs?: number
           <div className="stat">
             <span className="stat-label">Negotiated savings</span>
             <span className="stat-value">{usd(summary.savedCents)}</span>
+          </div>
+          <div className="stat">
+            <span className="stat-label">Returned to you</span>
+            <span className="stat-value">{usd(summary.returnedCents)}</span>
           </div>
           <div className="stat">
             <span className="stat-label">Stopped by guardrails</span>

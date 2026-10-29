@@ -27,6 +27,7 @@
     "channel3:search": "npm -w apps/server run channel3:search --",
     "pipeline:demo": "npm -w apps/server run pipeline:demo --",
     "demo:video": "npm -w apps/server run demo:video --",
+    "payout:cancel-demo": "npm -w apps/server run payout:cancel-demo",
     "webhook:forged": "npm -w apps/server run webhook:forged"
   },
   "engines": { "node": ">=20" }

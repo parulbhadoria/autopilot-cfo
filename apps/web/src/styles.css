@@ -90,3 +90,6 @@ pre { overflow-x: auto; background: var(--bg); padding: 12px; border-radius: 8px
 .cell-warn { color: var(--warn-text); font-weight: 600; }
 .cell-bad { color: var(--bad-text); font-weight: 600; }
 .cell-agent { color: var(--accent); font-weight: 600; }
+
+/* Day 18: payment actions */
+.actions { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }

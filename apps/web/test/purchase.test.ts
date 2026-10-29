@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeStep, outcomeInfo } from "../src/lib/purchase";
-import type { TranscriptEntry } from "../src/types";
+import { describeStep, effectiveOutcome, outcomeInfo } from "../src/lib/purchase";
+import type { PaymentRecord, PurchaseResult, TranscriptEntry } from "../src/types";
 
 const entry = (over: Partial<TranscriptEntry>): TranscriptEntry => ({
   negotiationId: "n", seq: 0, at: 0, round: 1, from: "buyer", type: "offer", sku: "s", quantity: 4, currency: "USD", ...over,
@@ -36,3 +36,32 @@ describe("outcomeInfo", () => {
     expect(outcomeInfo("something_new")).toEqual({ tone: "info", text: "something_new" });
   });
 });
+
+   describe("effectiveOutcome", () => {
+     const withStatus = (status: PaymentRecord["status"] | undefined, outcome = "payment_started"): PurchaseResult => ({
+       outcome,
+       payment: status ? ({ status } as PaymentRecord) : undefined,
+     });
+
+     it("follows the payment's real status, not the outcome stored when the order was placed", () => {
+       expect(effectiveOutcome(withStatus("PROCESSING"))).toBe("payment_started");
+       expect(effectiveOutcome(withStatus("SUCCESS"))).toBe("payment_started");
+       expect(effectiveOutcome(withStatus("PENDING_APPROVAL", "awaiting_approval"))).toBe("awaiting_approval");
+       expect(effectiveOutcome(withStatus("REJECTED"))).toBe("rejected_by_owner");
+       expect(effectiveOutcome(withStatus("DENIED"))).toBe("payment_denied");
+       expect(effectiveOutcome(withStatus("FAILED"))).toBe("payment_failed");
+       expect(effectiveOutcome(withStatus("REVERSED"))).toBe("payment_reversed");
+       expect(effectiveOutcome(withStatus("UNKNOWN"))).toBe("payment_unknown");
+     });
+
+     it("uses the stored outcome when there is no payment", () => {
+       expect(effectiveOutcome(withStatus(undefined, "no_deal"))).toBe("no_deal");
+       expect(effectiveOutcome(withStatus(undefined, "invoice_mismatch"))).toBe("invoice_mismatch");
+     });
+
+     it("every outcome it can return has text for the owner", () => {
+       for (const s of ["PROCESSING", "PENDING_APPROVAL", "REJECTED", "DENIED", "FAILED", "REVERSED", "UNKNOWN"] as const) {
+         expect(outcomeInfo(effectiveOutcome(withStatus(s))).text.length).toBeGreaterThan(10);
+       }
+     });
+   });

@@ -45,7 +45,14 @@ export interface PaymentRecord {
   decision: "allow" | "deny" | "require_approval";
   summary: string;
   checks: CheckResult[];
-  payoutBatchId?: string;
+    payoutBatchId?: string;
+  /** PayPal's id and latest status for the payout item (SUCCESS, UNCLAIMED, ...). */
+  payoutItemId?: string;
+  payoutItemStatus?: string;
+  /** PayPal's status for the whole batch. A payout can only be cancelled once this is SUCCESS. */
+  payoutBatchStatus?: string;
+  /** A refund requested from the vendor after delivery. PayPal cannot reverse a delivered payout. */
+  refund?: { state: "REQUESTED" | "RECEIVED"; requestedAt: number; receivedAt?: number; reason?: string };
   events: { at: number; type: string; detail?: string }[];
   createdAt: number;
   updatedAt: number;

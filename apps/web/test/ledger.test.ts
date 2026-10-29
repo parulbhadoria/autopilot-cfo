@@ -125,9 +125,36 @@ describe("summarize", () => {
     const denied = dealRun({ outcome: "payment_denied", payment: payment({ status: "DENIED" }) }, "r4");
     const bad = dealRun({ outcome: "invoice_mismatch", payment: undefined }, "r5");
     const s = summarize(toNegotiationRows([paid, paid2, held, denied, bad]));
-    expect(s).toEqual({ runs: 5, paidCents: 9_800 + 9_650, blocked: 2, savedCents: 2_200 * 2 });
+    expect(s).toEqual({ runs: 5, paidCents: 9_800 + 9_650, blocked: 2, savedCents: 2_200 * 2, returnedCents: 0 });
   });
   it("is all zeros for an empty ledger", () => {
-    expect(summarize([])).toEqual({ runs: 0, paidCents: 0, blocked: 0, savedCents: 0 });
+    expect(summarize([])).toEqual({ runs: 0, paidCents: 0, blocked: 0, savedCents: 0, returnedCents: 0 }); 
   });
 });
+
+   describe("cancelled and refunded orders", () => {
+     const reversed = (extra: Partial<PaymentRecord> = {}) =>
+       dealRun({ outcome: "payment_started", payment: payment({ status: "REVERSED", payoutItemStatus: "RETURNED", ...extra }) }, "r_rev");
+
+     it("shows the real state even though the server stored the outcome as it was at purchase time", () => {
+       const [row] = toNegotiationRows([reversed()]);
+       expect(row).toMatchObject({ outcome: "payment_reversed", paymentStatus: "REVERSED", payoutItemStatus: "returned", refundState: "" });
+       expect(row.outcomeText).toBe("This payment was cancelled or refunded");
+       expect(row.savedCents).toBeUndefined(); // money came back, so no savings are claimed
+     });
+
+     it("returned money is counted separately and not as paid out", () => {
+       const rows = toNegotiationRows([dealRun(), reversed({ amountCents: 9_650 })]);
+       const s = summarize(rows);
+       expect(s.paidCents).toBe(9_800);
+       expect(s.returnedCents).toBe(9_650);
+     });
+
+     it("shows a refund request and its confirmation", () => {
+       const requested = dealRun({ payment: payment({ status: "SUCCESS", refund: { state: "REQUESTED", requestedAt: 1 } }) }, "a");
+       const received = dealRun({ payment: payment({ status: "REVERSED", refund: { state: "RECEIVED", requestedAt: 1, receivedAt: 2 } }) }, "b");
+       const rows = toNegotiationRows([requested, received]);
+       expect(rows.map((r) => r.refundState)).toEqual(["requested", "received"]);
+       expect(rows[0].paymentStatus).toBe("SUCCESS");
+     });
+   });

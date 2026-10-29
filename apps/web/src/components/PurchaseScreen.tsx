@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, type Api } from "../api";
-import { describeStep, outcomeInfo } from "../lib/purchase";
+import { describeStep, effectiveOutcome, outcomeInfo } from "../lib/purchase";
+import { PaymentActions } from "./PaymentActions";
 import { parseDollars, usd } from "../lib/format";
 import type { PaymentRecord, PurchaseRun } from "../types";
 
@@ -11,7 +12,7 @@ export function RunDetail({ run, api, onChanged }: { run: PurchaseRun; api: Api;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const r = run.result;
-  const info = outcomeInfo(r.outcome);
+  const info = outcomeInfo(effectiveOutcome(r));
   const pending = r.payment?.status === "PENDING_APPROVAL";
 
   async function decide(kind: "approve" | "reject") {
@@ -20,16 +21,8 @@ export function RunDetail({ run, api, onChanged }: { run: PurchaseRun; api: Api;
     setError(null);
     try {
       const payment: PaymentRecord = kind === "approve" ? await api.approvePayment(r.payment.paymentId) : await api.rejectPayment(r.payment.paymentId);
-      // Show what the server actually decided: approval re-checks your rules and can still be denied.
-      const outcome =
-        payment.status === "REJECTED"
-          ? "rejected_by_owner"
-          : payment.status === "PROCESSING" || payment.status === "SUCCESS"
-            ? "payment_started"
-            : payment.status === "DENIED"
-              ? "payment_denied"
-              : "payment_failed";
-      onChanged({ ...run, result: { ...r, payment, outcome } });
+        // The outcome shown is derived from the payment's real status, so approval that is refused on the re-check shows as blocked.
+        onChanged({ ...run, result: { ...r, payment } });
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -90,6 +83,7 @@ export function RunDetail({ run, api, onChanged }: { run: PurchaseRun; api: Api;
               </div>
             ))}
 
+            <PaymentActions payment={r.payment} api={api} onUpdated={(payment) => onChanged({ ...run, result: { ...r, payment } })} />      
           {pending && (
             <div className="row">
               <button type="button" className="btn primary" disabled={busy} onClick={() => decide("approve")}>
@@ -222,7 +216,7 @@ export function PurchaseScreen({ api }: { api: Api }) {
                   <td>{new Date(h.createdAt).toLocaleTimeString()}</td>
                   <td>{h.request.category}</td>
                   <td>{h.request.quantity}</td>
-                  <td>{outcomeInfo(h.result.outcome).text.split(".")[0]}</td>
+                  <td>{outcomeInfo(effectiveOutcome(h.result)).text.split(".")[0]}</td>
                   <td>{h.result.payment ? usd(h.result.payment.amountCents) : "-"}</td>
                 </tr>
               ))}

@@ -1,5 +1,5 @@
 import type { PurchaseRun, TranscriptEntry } from "../types";
-import { outcomeInfo } from "./purchase";
+import { effectiveOutcome, outcomeInfo } from "./purchase";
 
 /** Human names for the policy checks, in the order the gate runs them. */
 export const CHECK_LABELS: Record<string, string> = {
@@ -39,6 +39,10 @@ export interface NegotiationRow {
   savedCents?: number;
   marketMedianCents?: number;
   paymentStatus: string;
+  /** PayPal's own word for the payout item (success, unclaimed, ...), once we have asked. */
+  payoutItemStatus: string;
+  /** "requested" or "received" when a refund was asked of the vendor. */
+  refundState: string;
   amountCents?: number;
   checksPassed: number;
   checksTotal: number;
@@ -48,13 +52,14 @@ export interface NegotiationRow {
 
 function blockedBy(run: PurchaseRun): string {
   const r = run.result;
-  if (r.outcome === "invoice_mismatch") return "Invoice check";
-  if (r.outcome === "category_not_authorized") return "Your mandate";
-  if (r.outcome === "payment_denied") {
+  const outcome = effectiveOutcome(r);
+  if (outcome === "invoice_mismatch") return "Invoice check";
+  if (outcome === "category_not_authorized") return "Your mandate";
+  if (outcome === "payment_denied") {
     const failed = r.payment?.checks.find((c) => !c.passed && c.id !== "approval_threshold");
     return failed ? checkLabel(failed.id) : "Policy gate";
   }
-  if (r.outcome === "rejected_by_owner") return "You";
+  if (outcome === "rejected_by_owner") return "You";
   return "";
 }
 
@@ -67,13 +72,14 @@ export function toNegotiationRows(runs: PurchaseRun[]): NegotiationRow[] {
     const paymentStatus = r.payment?.status ?? "";
     const counted = r.negotiation?.outcome === "deal" && PAID.has(paymentStatus);
     const checks = r.payment?.checks ?? [];
-    const info = outcomeInfo(r.outcome);
+    const outcome = effectiveOutcome(r);
+    const info = outcomeInfo(outcome);
     return {
       runId: run.runId,
       when: run.createdAt,
       item: run.request.category,
       quantity: run.request.quantity,
-      outcome: r.outcome,
+      outcome,
       outcomeText: info.text.split(".")[0],
       tone: info.tone,
       rounds: r.negotiation?.rounds ?? 0,
@@ -82,6 +88,8 @@ export function toNegotiationRows(runs: PurchaseRun[]): NegotiationRow[] {
       savedCents: counted && opening !== undefined && accepted !== undefined ? opening - accepted : undefined,
       marketMedianCents: r.market && r.market.count > 0 ? r.market.medianCents : undefined,
       paymentStatus,
+      payoutItemStatus: (r.payment?.payoutItemStatus ?? "").toLowerCase(),
+      refundState: (r.payment?.refund?.state ?? "").toLowerCase(),
       amountCents: r.payment?.amountCents,
       checksPassed: checks.filter((c) => c.passed).length,
       checksTotal: checks.length,
@@ -152,6 +160,8 @@ export interface LedgerSummary {
   /** Orders stopped by a guardrail (denied, bad invoice, or not allowed). */
   blocked: number;
   savedCents: number;
+  /** Money that came back to the owner (cancelled or refunded payouts). */
+  returnedCents: number;
 }
 
 export function summarize(rows: NegotiationRow[]): LedgerSummary {
@@ -160,5 +170,6 @@ export function summarize(rows: NegotiationRow[]): LedgerSummary {
     paidCents: rows.filter((r) => PAID.has(r.paymentStatus)).reduce((a, r) => a + (r.amountCents ?? 0), 0),
     blocked: rows.filter((r) => ["payment_denied", "invoice_mismatch", "category_not_authorized"].includes(r.outcome)).length,
     savedCents: rows.reduce((a, r) => a + (r.savedCents ?? 0), 0),
+    returnedCents: rows.filter((r) => r.paymentStatus === "REVERSED").reduce((a, r) => a + (r.amountCents ?? 0), 0),
   };
 }

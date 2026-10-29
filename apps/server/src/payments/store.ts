@@ -32,6 +32,13 @@ export interface PaymentRecord {
   request: unknown;
   senderBatchId?: string;
   payoutBatchId?: string;
+  /** PayPal's id and latest status for the payout item (SUCCESS, UNCLAIMED, ...), set by syncing with PayPal. */
+  payoutItemId?: string;
+  payoutItemStatus?: string;
+  /** PayPal's status for the whole payout batch. An item can only be cancelled once the batch is SUCCESS (processed). */
+  payoutBatchStatus?: string;
+  /** A refund REQUESTED from the vendor after delivery. PayPal cannot reverse a delivered payout. */
+  refund?: { state: "REQUESTED" | "RECEIVED"; requestedAt: number; receivedAt?: number; reason?: string };
   events: PaymentEvent[];
   createdAt: number;
   updatedAt: number;

@@ -5,7 +5,8 @@ import { ZodError, z } from "zod";
 import type { MarketLookup } from "./channel3/market.js";
 import type { Llm } from "./llm/types.js";
 import { MandateParseError, parseMandate } from "./mandate/parser.js";
-import { approvePayment, rejectPayment, submitPayment } from "./payments/service.js";
+import { PayPalError } from "./paypal/client.js";
+import { PaymentActionError, approvePayment, cancelPayment, markRefundReceived, rejectPayment, requestRefund, submitPayment, syncPayment } from "./payments/service.js";
 import { runPurchase, type PurchaseDeps } from "./pipeline/purchase.js";
 import { PurchaseStore } from "./purchases/store.js";
 import type { Seller } from "./seller/seller.js";
@@ -125,6 +126,17 @@ export function createApp(deps: AppDeps) {
     }),
   );
   api.post("/payments/:id/reject", (req, res) => res.json(rejectPayment(payDeps, req.params.id)));
+  
+  // Ask PayPal where a payout stands.
+  api.post("/payments/:id/sync", wrap(async (req, res) => res.json(await syncPayment(payDeps, req.params.id))));
+  // Cancel a payout the recipient has not claimed; PayPal returns the money.
+  api.post("/payments/:id/cancel", wrap(async (req, res) => res.json(await cancelPayment(payDeps, req.params.id))));
+  // Record a refund request to the vendor for a delivered payout (moves no money), then confirm it later.
+  api.post(
+    "/payments/:id/refund-request",
+    wrap(async (req, res) => res.json(await requestRefund(payDeps, req.params.id, typeof req.body?.reason === "string" ? req.body.reason : undefined))),
+  );
+  api.post("/payments/:id/refund-received", wrap(async (req, res) => res.json(await markRefundReceived(payDeps, req.params.id))));
 
   // Shop -> negotiate -> policy gate -> pay, using the owner's active mandate.
   api.post(
@@ -165,6 +177,8 @@ export function createApp(deps: AppDeps) {
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof ZodError) return res.status(400).json({ error: "validation", issues: err.issues });
     if (err instanceof MandateParseError) return res.status(422).json({ error: err.message });
+    if (err instanceof PaymentActionError) return res.status(err.status).json({ error: err.message });
+    if (err instanceof PayPalError) return res.status(502).json({ error: `PayPal said: ${(err.body as any)?.message ?? err.message}` });
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : "internal error" });
   });
