@@ -23,6 +23,7 @@
     "pipeline:demo": "tsx src/scripts/14-pipeline-demo.ts",
     "demo:video": "tsx src/scripts/15-demo-video.ts",
     "payout:cancel-demo": "tsx src/scripts/16-cancel-demo.ts",
+    "webhook:admin": "tsx src/scripts/17-webhook-admin.ts",
     "webhook:forged": "tsx src/scripts/07-forged-webhook.ts"
   },
   "dependencies": {

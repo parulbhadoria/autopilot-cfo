@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeStep, effectiveOutcome, outcomeInfo } from "../src/lib/purchase";
+import { describeEvent, describeStep, effectiveOutcome, outcomeInfo } from "../src/lib/purchase";
 import type { PaymentRecord, PurchaseResult, TranscriptEntry } from "../src/types";
 
 const entry = (over: Partial<TranscriptEntry>): TranscriptEntry => ({
@@ -65,3 +65,24 @@ describe("outcomeInfo", () => {
        }
      });
    });
+
+
+describe("describeEvent", () => {
+  it("puts our own events in plain English", () => {
+    expect(describeEvent({ type: "policy_evaluated", detail: "All policy checks passed." })).toEqual({ label: "Your rules were checked", detail: "All policy checks passed.", viaWebhook: false });
+    expect(describeEvent({ type: "payout_cancelled" }).label).toMatch(/money returned/i);
+    expect(describeEvent({ type: "refund_requested" }).label).toMatch(/requested from the vendor/i);
+  });
+
+  it("marks what PayPal pushed to us, with a readable label", () => {
+    const e = describeEvent({ type: "webhook:PAYMENT.PAYOUTS-ITEM.SUCCEEDED" });
+    expect(e).toMatchObject({ label: "PayPal confirmed the payment was delivered", viaWebhook: true });
+    expect(describeEvent({ type: "webhook:PAYMENT.PAYOUTS-ITEM.UNCLAIMED" }).label).toMatch(/has not claimed/i);
+    expect(describeEvent({ type: "webhook:PAYMENT.PAYOUTS-ITEM.RETURNED" }).label).toMatch(/returned the money/i);
+  });
+
+  it("never shows a blank or crashes on an event it does not know", () => {
+    expect(describeEvent({ type: "something_new" })).toEqual({ label: "something_new", detail: undefined, viaWebhook: false });
+    expect(describeEvent({ type: "webhook:PAYMENT.NEW.THING" })).toMatchObject({ label: "PayPal event: PAYMENT.NEW.THING", viaWebhook: true });
+  });
+});

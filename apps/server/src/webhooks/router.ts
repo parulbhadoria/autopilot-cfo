@@ -1,6 +1,7 @@
 import express from "express";
 import type { SpendLedger } from "@autopilot/guardrail";
-import type { PaymentStatus, PaymentStore } from "../payments/store.js";
+import type { PaymentRecord, PaymentStatus, PaymentStore } from "../payments/store.js";
+import { BATCH_STATUS_BY_EVENT, ITEM_STATUS_BY_EVENT } from "../paypal/webhookEvents.js";
 import type { WebhookVerifier } from "../paypal/webhook.js";
 
 export interface WebhookDeps {
@@ -56,15 +57,27 @@ export function createWebhookRouter(deps: WebhookDeps) {
     // 404 on purpose: PayPal retries, which covers the race where the webhook beats our own write.
     if (!rec) return res.status(404).json({ handled: false, reason: "unknown payout" });
 
+    // Only an ITEM event decides what happened to the money. A batch can be SUCCESS (processed) while its item
+    // is still UNCLAIMED, so batch events update the batch status only.
     let status: PaymentStatus | undefined;
     if (type === "PAYMENT.PAYOUTS-ITEM.SUCCEEDED") status = "SUCCESS";
-    else if (type === "PAYMENT.PAYOUTSBATCH.SUCCESS" && rec.status === "PROCESSING") status = "SUCCESS";
     else if (FAILED.has(type)) status = "FAILED";
     else if (REVERSED.has(type)) status = "REVERSED";
-    // UNCLAIMED / HELD / BATCH.PROCESSING: log only, status unchanged.
+    // A late "delivered" event must not undo a payment we already know failed or came back.
+    if (status === "SUCCESS" && (rec.status === "REVERSED" || rec.status === "FAILED")) status = undefined;
+
+    const patch: Partial<PaymentRecord> = {};
+    if (status) patch.status = status;
+    const itemStatus = ITEM_STATUS_BY_EVENT[type];
+    if (itemStatus) {
+      patch.payoutItemStatus = itemStatus;
+      if (resource?.payout_item_id) patch.payoutItemId = String(resource.payout_item_id);
+    }
+    const batchStatus = BATCH_STATUS_BY_EVENT[type];
+    if (batchStatus) patch.payoutBatchStatus = batchStatus;
 
     const detail = resource?.errors?.message ?? resource?.transaction_status ?? undefined;
-    deps.store.update(rec.paymentId, status ? { status } : {}, { type: `webhook:${type}`, detail });
+    deps.store.update(rec.paymentId, patch, { type: `webhook:${type}`, detail });
 
     // Money did not (or no longer) leave: release the budget reservation.
     if (status === "FAILED" || status === "REVERSED") deps.ledger.remove(rec.dealId);

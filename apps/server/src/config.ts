@@ -23,6 +23,8 @@ export const config = {
   vendorEmail: () => process.env.VENDOR_EMAIL ?? "",
   webhookId: () => required("PAYPAL_WEBHOOK_ID", "Create a webhook in the PayPal dashboard and copy its ID."),
   port: () => Number(process.env.PORT ?? 3000),
+  /** How often to ask PayPal about payments still in flight. 0 turns it off. */
+  reconcileSeconds: () => Number(process.env.RECONCILE_SECONDS ?? 10),
   adminApiKey: () => process.env.ADMIN_API_KEY || undefined,
   hardMaxWeeklyCents: () => Math.round(Number(process.env.HARD_MAX_WEEKLY_USD ?? 5000) * 100),
 };

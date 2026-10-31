@@ -93,3 +93,11 @@ pre { overflow-x: auto; background: var(--bg); padding: 12px; border-radius: 8px
 
 /* Day 18: payment actions */
 .actions { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+
+
+/* Day 19: payment timeline */
+.timeline summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+.timeline ol { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.timeline li { display: flex; gap: 12px; font-size: 0.9rem; }
+.timeline-time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 84px; }
+.badge { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; background: var(--chip); color: var(--accent); }

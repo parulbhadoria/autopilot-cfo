@@ -116,7 +116,8 @@ describe("PayPal webhooks", () => {
       event_type: "PAYMENT.PAYOUTSBATCH.SUCCESS",
       resource: { batch_header: { payout_batch_id: "nope", sender_batch_header: { sender_batch_id: "cfo-d1" } } },
     });
-    expect(store.get(paid.body.paymentId)?.status).toBe("SUCCESS");
+      // A batch event only updates the batch: the item (and so the money) may still be unclaimed.
+    expect(store.get(paid.body.paymentId)).toMatchObject({ status: "PROCESSING", payoutBatchStatus: "SUCCESS" });
   });
 
   it("returns 404 for unknown payouts (so PayPal retries) and ignores other event types", async () => {

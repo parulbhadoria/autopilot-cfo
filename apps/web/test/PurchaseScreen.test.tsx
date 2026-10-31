@@ -39,7 +39,7 @@ function fakeApi(over: Partial<Record<keyof Api, any>> = {}) {
     approvePayment: vi.fn(),
     rejectPayment: vi.fn(),
     ...over,
-  } as unknown as Api & { purchase: any; approvePayment: any; rejectPayment: any };
+  } as unknown as Api & { listPurchases: any; purchase: any; approvePayment: any; rejectPayment: any };
 }
 
 describe("PurchaseScreen", () => {
@@ -157,6 +157,49 @@ describe("PurchaseScreen", () => {
     await user.click(await screen.findByRole("button", { name: /cancel payout and return my money/i }));
     expect((await screen.findAllByText(/cancelled or refunded/i)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Paid automatically/i)).not.toBeInTheDocument();
+  });
+  
+  const sent = (status: any, item?: string) => ({
+    ...run(),
+    result: { ...run().result, payment: { ...run().result.payment!, status, payoutBatchId: "B1", payoutItemStatus: item } },
+  });
+
+  it("refreshes a payment that is still in flight by itself, then stops", async () => {
+    const user = userEvent.setup();
+    const delivered = sent("SUCCESS", "SUCCESS");
+    const api = fakeApi({ purchase: vi.fn().mockResolvedValue(sent("PROCESSING")) });
+    api.listPurchases.mockResolvedValueOnce({ purchases: [] }).mockResolvedValue({ purchases: [delivered] });
+    render(<PurchaseScreen api={api} pollMs={30} />);
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+
+    expect(await screen.findByText("Updating live")).toBeInTheDocument();
+    expect(await screen.findByText(/PayPal says: success/i)).toBeInTheDocument(); // nobody clicked "Check PayPal status"
+    await waitFor(() => expect(screen.queryByText("Updating live")).not.toBeInTheDocument());
+
+    const calls = api.listPurchases.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(api.listPurchases.mock.calls.length).toBeLessThanOrEqual(calls + 1); // polling has stopped
+  });
+
+  it("does not poll at all when nothing is in flight", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({ purchase: vi.fn().mockResolvedValue(sent("SUCCESS", "SUCCESS")) });
+    render(<PurchaseScreen api={api} pollMs={30} />);
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await screen.findByText(/PayPal says: success/i);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(api.listPurchases).toHaveBeenCalledTimes(1); // only the initial load
+    expect(screen.queryByText("Updating live")).not.toBeInTheDocument();
+  });
+
+  it("keeps showing the order if a refresh fails, and recovers on the next one", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({ purchase: vi.fn().mockResolvedValue(sent("PROCESSING")) });
+    api.listPurchases.mockResolvedValueOnce({ purchases: [] }).mockRejectedValueOnce(new Error("network")).mockResolvedValue({ purchases: [sent("SUCCESS", "SUCCESS")] });
+    render(<PurchaseScreen api={api} pollMs={30} />);
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    expect(await screen.findByText(/PayPal says: success/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows a clear message when the purchase fails", async () => {

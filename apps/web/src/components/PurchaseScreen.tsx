@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, type Api } from "../api";
 import { describeStep, effectiveOutcome, outcomeInfo } from "../lib/purchase";
 import { PaymentActions } from "./PaymentActions";
+import { PaymentTimeline } from "./PaymentTimeline";
 import { parseDollars, usd } from "../lib/format";
 import type { PaymentRecord, PurchaseRun } from "../types";
 
@@ -83,7 +84,8 @@ export function RunDetail({ run, api, onChanged }: { run: PurchaseRun; api: Api;
               </div>
             ))}
 
-            <PaymentActions payment={r.payment} api={api} onUpdated={(payment) => onChanged({ ...run, result: { ...r, payment } })} />      
+            <PaymentActions payment={r.payment} api={api} onUpdated={(payment) => onChanged({ ...run, result: { ...r, payment } })} />   
+             <PaymentTimeline events={r.payment.events} />   
           {pending && (
             <div className="row">
               <button type="button" className="btn primary" disabled={busy} onClick={() => decide("approve")}>
@@ -106,7 +108,10 @@ export function RunDetail({ run, api, onChanged }: { run: PurchaseRun; api: Api;
   );
 }
 
-export function PurchaseScreen({ api }: { api: Api }) {
+  /** A payment PayPal has not finished with yet, so its status can still change by itself. */
+  const inFlight = (run: PurchaseRun) => ["PROCESSING", "UNKNOWN"].includes(run.result.payment?.status ?? "");
+
+  export function PurchaseScreen({ api, pollMs = 5000 }: { api: Api; pollMs?: number }) {
   const [category, setCategory] = useState("sheet pans");
   const [quantity, setQuantity] = useState("4");
   const [maxUnit, setMaxUnit] = useState("");
@@ -125,6 +130,27 @@ export function PurchaseScreen({ api }: { api: Api }) {
       alive = false;
     };
   }, [api]);
+
+     // While any payment is still in flight, refresh from the server so webhooks and status checks show up by themselves.
+     const live = history.some(inFlight);
+     useEffect(() => {
+       if (!live) return;
+       let alive = true;
+       const id = setInterval(async () => {
+         try {
+           const fresh = (await api.listPurchases()).purchases;
+           if (!alive) return;
+           setHistory(fresh);
+           setCurrent((c) => (c ? (fresh.find((p) => p.runId === c.runId) ?? c) : c));
+         } catch {
+           /* a failed refresh is retried on the next tick */
+         }
+       }, pollMs);
+       return () => {
+         alive = false;
+         clearInterval(id);
+       };
+     }, [live, api, pollMs]);
 
   const qty = Number(quantity);
   const qtyOk = Number.isInteger(qty) && qty >= 1 && qty <= 10_000;
@@ -190,7 +216,10 @@ export function PurchaseScreen({ api }: { api: Api }) {
 
       {current && (
         <section className="card" aria-label="Latest purchase">
-          <h2>Latest purchase</h2>
+             <div className="card-head">
+               <h2>Latest purchase</h2>
+               {inFlight(current) && <span className="pill ok">Updating live</span>}
+             </div>
           <RunDetail run={current} api={api} onChanged={onChanged} />
         </section>
       )}

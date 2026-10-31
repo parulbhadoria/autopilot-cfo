@@ -72,3 +72,37 @@ export function effectiveOutcome(r: PurchaseResult): string {
       return "payment_started"; // PROCESSING, SUCCESS
   }
 }
+
+const EVENT_LABELS: Record<string, string> = {
+  policy_evaluated: "Your rules were checked",
+  payout_requested: "Payout sent to PayPal",
+  payout_created: "PayPal accepted the payout",
+  payout_rejected: "PayPal refused the payout",
+  payout_unknown: "PayPal did not answer, so the outcome is unknown",
+  synced_with_paypal: "Checked with PayPal",
+  owner_approved: "You approved the payment",
+  owner_rejected: "You rejected the payment",
+  approval_denied_on_recheck: "Approval refused when your rules were re-checked",
+  payout_cancelled: "Unclaimed payout cancelled, money returned",
+  refund_requested: "Refund requested from the vendor",
+  refund_received: "You confirmed the refund arrived",
+  "webhook:PAYMENT.PAYOUTSBATCH.PROCESSING": "PayPal is processing the batch",
+  "webhook:PAYMENT.PAYOUTSBATCH.SUCCESS": "PayPal finished processing the batch",
+  "webhook:PAYMENT.PAYOUTSBATCH.DENIED": "PayPal denied the batch",
+  "webhook:PAYMENT.PAYOUTS-ITEM.SUCCEEDED": "PayPal confirmed the payment was delivered",
+  "webhook:PAYMENT.PAYOUTS-ITEM.UNCLAIMED": "PayPal says the vendor has not claimed the payment",
+  "webhook:PAYMENT.PAYOUTS-ITEM.HELD": "PayPal is holding the payment",
+  "webhook:PAYMENT.PAYOUTS-ITEM.FAILED": "PayPal says the payment failed",
+  "webhook:PAYMENT.PAYOUTS-ITEM.DENIED": "PayPal says the payment was denied",
+  "webhook:PAYMENT.PAYOUTS-ITEM.BLOCKED": "PayPal says the payment was blocked",
+  "webhook:PAYMENT.PAYOUTS-ITEM.CANCELED": "PayPal says the payment was cancelled",
+  "webhook:PAYMENT.PAYOUTS-ITEM.RETURNED": "PayPal returned the money to you",
+  "webhook:PAYMENT.PAYOUTS-ITEM.REFUNDED": "PayPal refunded the money to you",
+};
+
+/** A payment-history event in plain English. `viaWebhook` marks updates PayPal pushed to us. */
+export function describeEvent(e: { type: string; detail?: string }): { label: string; detail?: string; viaWebhook: boolean } {
+  const viaWebhook = e.type.startsWith("webhook:");
+  const label = EVENT_LABELS[e.type] ?? (viaWebhook ? `PayPal event: ${e.type.slice("webhook:".length)}` : e.type);
+  return { label, detail: e.detail, viaWebhook };
+}
