@@ -96,6 +96,21 @@ describe("reconcileOnce", () => {
 });
 
 describe("startReconciler", () => {
+  it("can cover several sessions with one timer", async () => {
+    vi.useFakeTimers();
+    const one = setup();
+    const two = setup();
+    const a = await submitPayment(one.deps, mandate, deal("a"));
+    const b = await submitPayment(two.deps, mandate, deal("b"));
+    one.items.set(a.payoutBatchId!, "SUCCESS");
+    two.items.set(b.payoutBatchId!, "SUCCESS");
+    const stop = startReconciler(() => [one.deps, two.deps], { intervalMs: 10_000 });
+    await vi.advanceTimersByTimeAsync(10_000);
+    stop();
+    expect(one.deps.store.get(a.paymentId)?.status).toBe("SUCCESS");
+    expect(two.deps.store.get(b.paymentId)?.status).toBe("SUCCESS");
+  });
+
   it("checks on a timer until stopped", async () => {
     vi.useFakeTimers();
     const { deps, items, calls } = setup();

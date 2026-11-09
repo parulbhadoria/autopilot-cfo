@@ -60,7 +60,7 @@ function MandateSummary({ m }: { m: Mandate }) {
   );
 }
 
-export function MandateScreen({ api }: { api: Api }) {
+export function MandateScreen({ api, demoMode = false }: { api: Api; demoMode?: boolean }) {
   const [text, setText] = useState("");
   const [active, setActive] = useState<Mandate | null>(null);
   const [loadingActive, setLoadingActive] = useState(true);
@@ -68,7 +68,7 @@ export function MandateScreen({ api }: { api: Api }) {
   const [weekly, setWeekly] = useState("");
   const [cap, setCap] = useState("");
   const [auto, setAuto] = useState("");
-  const [busy, setBusy] = useState<"parsing" | "saving" | null>(null);
+  const [busy, setBusy] = useState<"parsing" | "saving" | "demo" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -83,6 +83,23 @@ export function MandateScreen({ api }: { api: Api }) {
       alive = false;
     };
   }, [api]);
+
+  /** One click in the public demo: preset rules, no AI call, so it is instant and costs nothing. */
+  async function onStartDemo() {
+    setError(null);
+    setNotice(null);
+    setBusy("demo");
+    try {
+      const r = await api.startDemo();
+      setActive(r.mandate);
+      setParsed(null);
+      setNotice("Demo rules are active. Open the Buy tab to try a purchase.");
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function onParse() {
     setError(null);
@@ -155,6 +172,11 @@ export function MandateScreen({ api }: { api: Api }) {
           <button type="button" className="btn" onClick={() => setText(DEMO_INSTRUCTION)} disabled={busy !== null}>
             Use demo instruction
           </button>
+          {demoMode && (
+            <button type="button" className="btn primary" onClick={onStartDemo} disabled={busy !== null}>
+              {busy === "demo" ? "Starting..." : "Start with the demo rules (instant)"}
+            </button>
+          )}
         </div>
       </section>
 

@@ -1,0 +1,39 @@
+# Render Blueprint: one web service that serves both the API and the built web app.
+# Secrets are NOT stored here. Render asks for every `sync: false` value when you create the service.
+services:
+  - type: web
+    name: autopilot-cfo
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build:web
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYPAL_ENV
+        value: sandbox
+      # Public-demo safeguards: per-visitor sessions, purchase limits, direct payments disabled.
+      - key: DEMO_MODE
+        value: "true"
+      - key: LIMIT_PURCHASES_PER_HOUR
+        value: "10"
+      - key: LIMIT_PURCHASES_PER_IP_PER_HOUR
+        value: "4"
+      - key: LIMIT_PARSES_PER_HOUR
+        value: "60"
+      - key: LIMIT_PARSES_PER_IP_PER_HOUR
+        value: "15"
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: VENDOR_EMAIL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false

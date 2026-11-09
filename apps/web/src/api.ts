@@ -1,4 +1,4 @@
-import type { Mandate, ParsedMandate, PaymentRecord, PurchaseRun } from "./types";
+import type { DemoInfo, Mandate, ParsedMandate, PaymentRecord, PurchaseRun } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -21,6 +21,8 @@ export interface ApiOptions {
   baseUrl?: string;
   /** Called on every request; return the x-api-key to send, if the server needs one. */
   getApiKey?: () => string | undefined;
+  /** Identifies this browser to the server, so each visitor has their own rules, budget and history. */
+  getSessionId?: () => string | undefined;
   fetchImpl?: typeof fetch;
 }
 
@@ -33,6 +35,8 @@ export function createApi(o: ApiOptions = {}) {
     if (body !== undefined) headers["content-type"] = "application/json";
     const key = o.getApiKey?.();
     if (key) headers["x-api-key"] = key;
+    const session = o.getSessionId?.();
+    if (session) headers["x-session-id"] = session;
 
     let res: Response;
     try {
@@ -52,6 +56,9 @@ export function createApi(o: ApiOptions = {}) {
   }
 
   return {
+    demoInfo: () => request<DemoInfo>("GET", "/api/demo"),
+    startDemo: () => request<ParsedMandate>("POST", "/api/demo/start"),
+    resetDemo: () => request<{ ok: boolean }>("POST", "/api/demo/reset"),
     health: () => request<{ ok: boolean; mandateSet: boolean }>("GET", "/health"),
     parseMandate: (text: string) => request<ParsedMandate>("POST", "/api/mandate/parse", { text }),
     putMandate: (mandate: Mandate) => request<{ mandate: Mandate }>("PUT", "/api/mandate", mandate),

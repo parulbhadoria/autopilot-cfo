@@ -27,15 +27,23 @@ export async function reconcileOnce(deps: PaymentDeps, o: { maxAgeMs?: number } 
   return { checked: pending.length, changed, errors };
 }
 
-/** Runs reconcileOnce on a timer, never two at once. Returns a function that stops it. intervalMs <= 0 turns it off. */
-export function startReconciler(deps: PaymentDeps, o: { intervalMs: number; maxAgeMs?: number; log?: (message: string) => void }): () => void {
+/** Runs reconcileOnce on a timer (for one set of payments, or for every session), never two at once. Returns a function that stops it. intervalMs <= 0 turns it off. */
+export function startReconciler(deps: PaymentDeps | (() => PaymentDeps[]), o: { intervalMs: number; maxAgeMs?: number; log?: (message: string) => void }): () => void {
   if (!(o.intervalMs > 0)) return () => {};
   let running = false;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
-      const r = await reconcileOnce(deps, { maxAgeMs: o.maxAgeMs });
+      // A function lets one timer cover every visitor's session.
+      const targets = typeof deps === "function" ? deps() : [deps];
+      const r = { checked: 0, changed: 0, errors: 0 };
+      for (const d of targets) {
+        const one = await reconcileOnce(d, { maxAgeMs: o.maxAgeMs });
+        r.checked += one.checked;
+        r.changed += one.changed;
+        r.errors += one.errors;
+      }
       if (r.changed > 0 || r.errors > 0) o.log?.(`payment sync: checked ${r.checked}, updated ${r.changed}, errors ${r.errors}`);
     } finally {
       running = false;

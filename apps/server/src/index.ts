@@ -1,17 +1,16 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { InMemoryLedger } from "@autopilot/guardrail";
 import { createApp } from "./app.js";
 import { createChannel3FromEnv, createMarketLookup } from "./channel3/index.js";
 import { config } from "./config.js";
 import { createLlmFromEnv, createToolChatFromEnv } from "./llm/index.js";
 import { createLlmBuyer, createRuleBuyer } from "./negotiation/index.js";
 import { startReconciler } from "./payments/reconciler.js";
-import { PaymentStore } from "./payments/store.js";
 import { createPayoutsClient } from "./paypal/payouts.js";
 import { verifyWebhookSignature } from "./paypal/webhook.js";
 import { Seller } from "./seller/index.js";
+import { SessionManager } from "./sessions.js";
 
 const vendorEmail = config.vendorEmail();
 if (!vendorEmail) console.warn("VENDOR_EMAIL is not set; the demo vendor will use vendor@example.com (payouts to it will not reach you).");
@@ -26,20 +25,22 @@ const webDist = resolve(dirname(fileURLToPath(import.meta.url)), "../../web/dist
 const staticDir = existsSync(resolve(webDist, "index.html")) ? webDist : undefined;
 console.log(staticDir ? `Web UI: serving ${webDist}` : "Web UI: not built (run `npm run build:web`, or use `npm run dev:all` for development)");
 
-// One shared set of payment state for the API, the webhook handler and the background status check.
-const ledger = new InMemoryLedger();
-const store = new PaymentStore();
+// Every visitor gets their own rules, budget and history. Webhooks and the status check look across all of them.
+const sessions = new SessionManager({ ttlMs: config.sessionTtlMs(), maxSessions: config.maxSessions() });
 const payouts = createPayoutsClient();
+const demo = config.demo();
+if (demo && config.adminApiKey()) console.warn("DEMO_MODE and ADMIN_API_KEY are both set: visitors will be locked out unless they know the key.");
+console.log(demo ? `PUBLIC DEMO MODE: ${demo.purchasesPerHour} purchases/hour in total, ${demo.purchasesPerIpPerHour} per visitor address, direct payments disabled` : "Demo mode: off");
 
 const app = createApp({
   staticDir,
-  ledger,
-  store,
+  sessions,
   payouts,
   verifyWebhook: verifyWebhookSignature,
   llm: createLlmFromEnv(),
   adminApiKey: config.adminApiKey(),
   hardMaxWeeklyCents: config.hardMaxWeeklyCents(),
+  demo,
   purchase: {
     seller,
     market,
@@ -48,7 +49,7 @@ const app = createApp({
 });
 
 const reconcileMs = config.reconcileSeconds() * 1000;
-startReconciler({ ledger, store, payouts }, { intervalMs: reconcileMs, log: console.log });
+startReconciler(() => sessions.all().map((s) => ({ ledger: s.ledger, store: s.store, payouts })), { intervalMs: reconcileMs, log: console.log });
 console.log(reconcileMs > 0 ? `Payment status check: every ${config.reconcileSeconds()}s (backs up PayPal webhooks)` : "Payment status check: off (RECONCILE_SECONDS=0)");
 
 app.listen(config.port(), () => console.log(`Autopilot CFO server on http://localhost:${config.port()}`));

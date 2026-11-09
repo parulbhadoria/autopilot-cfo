@@ -72,4 +72,23 @@ describe("api client", () => {
     }) as unknown as typeof fetch;
     await expect(createApi({ fetchImpl: down }).health()).rejects.toMatchObject({ status: 0, message: "Cannot reach the server. Is it running?" });
   });
+
+  it("sends the visitor id so the server keeps each browser's state separate", async () => {
+    const withId = recorder(json({ mandate: null }));
+    await createApi({ fetchImpl: withId.fetchImpl, getSessionId: () => "visitor-1234" }).getMandate();
+    expect((withId.calls[0].init.headers as any)["x-session-id"]).toBe("visitor-1234");
+
+    const without = recorder(json({ mandate: null }));
+    await createApi({ fetchImpl: without.fetchImpl }).getMandate();
+    expect((without.calls[0].init.headers as any)["x-session-id"]).toBeUndefined();
+  });
+
+  it("calls the public-demo endpoints", async () => {
+    const { fetchImpl, calls } = recorder(json({}));
+    const api = createApi({ fetchImpl });
+    await api.demoInfo();
+    await api.startDemo();
+    await api.resetDemo();
+    expect(calls.map((c) => `${c.init.method} ${c.url}`)).toEqual(["GET /api/demo", "POST /api/demo/start", "POST /api/demo/reset"]);
+  });
 });

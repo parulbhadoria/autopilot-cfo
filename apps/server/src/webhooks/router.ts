@@ -1,12 +1,12 @@
 import express from "express";
-import type { SpendLedger } from "@autopilot/guardrail";
-import type { PaymentRecord, PaymentStatus, PaymentStore } from "../payments/store.js";
+import type { PaymentRecord, PaymentStatus } from "../payments/store.js";
+import type { SessionManager } from "../sessions.js";
 import { BATCH_STATUS_BY_EVENT, ITEM_STATUS_BY_EVENT } from "../paypal/webhookEvents.js";
 import type { WebhookVerifier } from "../paypal/webhook.js";
 
 export interface WebhookDeps {
-  store: PaymentStore;
-  ledger: SpendLedger;
+  /** Webhooks arrive without any visitor attached, so the payment is found by its PayPal batch id in any session. */
+  sessions: Pick<SessionManager, "findPayment">;
   verify: WebhookVerifier;
 }
 
@@ -53,9 +53,10 @@ export function createWebhookRouter(deps: WebhookDeps) {
     const resource = event.resource;
     const b = batchIdOf(resource);
     const s = senderBatchIdOf(resource);
-    const rec = (b && deps.store.findByBatch(b)) || (s && deps.store.findByBatch(s)) || undefined;
+    const hit = (b && deps.sessions.findPayment(b)) || (s && deps.sessions.findPayment(s)) || undefined;
     // 404 on purpose: PayPal retries, which covers the race where the webhook beats our own write.
-    if (!rec) return res.status(404).json({ handled: false, reason: "unknown payout" });
+    if (!hit) return res.status(404).json({ handled: false, reason: "unknown payout" });
+    const { rec, session } = hit;
 
     // Only an ITEM event decides what happened to the money. A batch can be SUCCESS (processed) while its item
     // is still UNCLAIMED, so batch events update the batch status only.
@@ -77,10 +78,10 @@ export function createWebhookRouter(deps: WebhookDeps) {
     if (batchStatus) patch.payoutBatchStatus = batchStatus;
 
     const detail = resource?.errors?.message ?? resource?.transaction_status ?? undefined;
-    deps.store.update(rec.paymentId, patch, { type: `webhook:${type}`, detail });
+    session.store.update(rec.paymentId, patch, { type: `webhook:${type}`, detail });
 
     // Money did not (or no longer) leave: release the budget reservation.
-    if (status === "FAILED" || status === "REVERSED") deps.ledger.remove(rec.dealId);
+    if (status === "FAILED" || status === "REVERSED") session.ledger.remove(rec.dealId);
 
     if (event.id) seen.add(event.id);
     return res.json({ handled: true, status: status ?? rec.status });

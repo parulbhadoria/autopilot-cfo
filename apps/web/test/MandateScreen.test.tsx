@@ -149,4 +149,27 @@ describe("MandateScreen", () => {
     await user.click(screen.getByRole("button", { name: /discard/i }));
     expect(screen.queryByLabelText(/weekly budget/i)).not.toBeInTheDocument();
   });
+
+  it("offers one-click demo rules only in the public demo, and activates them without any AI call", async () => {
+    const user = userEvent.setup();
+    const none = fakeApi();
+    const { unmount } = render(<MandateScreen api={none} />);
+    expect(screen.queryByRole("button", { name: /start with the demo rules/i })).not.toBeInTheDocument();
+    unmount();
+
+    const api = fakeApi({ startDemo: vi.fn().mockResolvedValue({ mandate: mandate(), assumptions: [] }) });
+    render(<MandateScreen api={api} demoMode />);
+    await user.click(screen.getByRole("button", { name: /start with the demo rules/i }));
+    expect(await screen.findByText(/Demo rules are active/i)).toBeInTheDocument();
+    expect(await screen.findByText("Sunrise Mills")).toBeInTheDocument();
+    expect(api.parseMandate).not.toHaveBeenCalled();
+  });
+
+  it("shows why the demo rules could not start", async () => {
+    const user = userEvent.setup();
+    const api = fakeApi({ startDemo: vi.fn().mockRejectedValue(new ApiError(404, "Only available in the public demo.")) });
+    render(<MandateScreen api={api} demoMode />);
+    await user.click(screen.getByRole("button", { name: /start with the demo rules/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only available in the public demo.");
+  });
 });

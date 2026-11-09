@@ -94,3 +94,10 @@ export interface PurchaseRun {
   request: { category: string; quantity: number; maxUnitPriceCents?: number };
   result: PurchaseResult;
 }
+/** What the server says about the public demo (limits, and whether to show the demo buttons). */
+export interface DemoInfo {
+  demoMode: boolean;
+  limits?: { purchasesPerHour: number; purchasesPerVisitorPerHour: number };
+  /** Purchases this visitor can still make this hour (null = unlimited). */
+  remaining?: { purchases: number | null };
+}

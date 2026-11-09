@@ -101,3 +101,5 @@ pre { overflow-x: auto; background: var(--bg); padding: 12px; border-radius: 8px
 .timeline li { display: flex; gap: 12px; font-size: 0.9rem; }
 .timeline-time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 84px; }
 .badge { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; background: var(--chip); color: var(--accent); }
+/* Day 20: public demo banner */
+.banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); font-size: 0.92rem; }

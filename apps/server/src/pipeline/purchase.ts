@@ -89,13 +89,16 @@ export async function runPurchase(d: PurchaseDeps, req: PurchaseRequest): Promis
   // 1. Mandate
   let mandate: Mandate;
   let assumptions: string[];
-    try {
-    ({ mandate, assumptions } = await parseMandate(req.ownerText, {
-      llm: d.llm,
-      vendors: [vendor],
-      hardMaxWeeklyCents: d.hardMaxWeeklyCents,
-      knownCategories: [...new Set(catalog.map((p) => p.category))],
-    }));
+  try {
+    // The owner's confirmed rules (including any numbers they edited) win over re-reading their text with the AI.
+    ({ mandate, assumptions } =
+      req.parsedMandate ??
+      (await parseMandate(req.ownerText, {
+        llm: d.llm,
+        vendors: [vendor],
+        hardMaxWeeklyCents: d.hardMaxWeeklyCents,
+        knownCategories: [...new Set(catalog.map((p) => p.category))],
+      })));
   } catch (e) {
     return { outcome: "mandate_error", error: (e as Error).message };
   }
@@ -134,7 +137,7 @@ export async function runPurchase(d: PurchaseDeps, req: PurchaseRequest): Promis
     now: d.now,
   });
   const base = { mandate, assumptions, product, market, unitLimitCents, negotiation };
-    if (negotiation.outcome === "invoice_mismatch") {
+  if (negotiation.outcome === "invoice_mismatch") {
     return { outcome: "invoice_mismatch", error: "The vendor's invoice did not match the agreed terms.", ...base };
   }
   if (negotiation.outcome !== "deal" || !negotiation.deal) return { outcome: "no_deal", ...base };

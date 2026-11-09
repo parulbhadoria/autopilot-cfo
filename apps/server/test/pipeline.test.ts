@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryLedger } from "@autopilot/guardrail";
+import { InMemoryLedger, MandateSchema } from "@autopilot/guardrail";
 import type { MarketSummary } from "../src/channel3/market.js";
 import type { Llm } from "../src/llm/types.js";
 import { MandateParseError, parseMandate } from "../src/mandate/parser.js";
@@ -197,5 +197,46 @@ describe("parseMandate with a known category vocabulary", () => {
     const llm: Llm = { complete: async ({ system: s }) => ((system = s), mandateJson()) };
     await parseMandate("Keep flour stocked, $400/week", { llm, hardMaxWeeklyCents: 500_000, knownCategories: ["flour", "sheet pans"] });
     expect(system).toMatch(/Allowed categories: flour, sheet pans/);
+  });
+});
+
+describe("runPurchase: a confirmed mandate is used as given", () => {
+  const confirmed = (over: Record<string, unknown> = {}) =>
+    MandateSchema.parse({
+      mandateId: "confirmed-1", currency: "USD", weeklyBudgetCents: 40_000, perTransactionCapCents: 40_000, autoApproveUnderCents: 10_000,
+      categories: ["sheet pans"], vendors: [vendor], ...over,
+    });
+
+  it("never calls the AI when the owner's confirmed rules are passed in", async () => {
+    const { deps } = setup();
+    let aiCalls = 0;
+    deps.llm = { complete: async () => (aiCalls++, mandateJson()) };
+    const r = await runPurchase(deps, { ownerText: OWNER, need: need(), parsedMandate: { mandate: confirmed(), assumptions: [] } });
+    expect(aiCalls).toBe(0);
+    expect(r.mandate?.mandateId).toBe("confirmed-1");
+    expect(r.outcome).toBe("payment_started");
+  });
+
+  it("works with no AI configured at all", async () => {
+    const { deps } = setup();
+    deps.llm = { complete: async () => { throw new Error("LLM not configured"); } };
+    const r = await runPurchase(deps, { ownerText: "", need: need(), parsedMandate: { mandate: confirmed(), assumptions: [] } });
+    expect(r.outcome).toBe("payment_started");
+  });
+
+  it("enforces the numbers the owner edited, not the ones the AI first read from their text", async () => {
+    const { deps, payoutCalls } = setup(); // the AI would say: auto-approve under $100
+    const edited = confirmed({ autoApproveUnderCents: 7_500 }); // the owner lowered it to $75 on the review screen
+    const r = await runPurchase(deps, { ownerText: OWNER, need: need(), parsedMandate: { mandate: edited, assumptions: [] } });
+    expect(r.mandate?.autoApproveUnderCents).toBe(7_500);
+    expect(r.outcome).toBe("awaiting_approval"); // ~$96 is over $75, so the owner must approve
+    expect(payoutCalls).toHaveLength(0);
+  });
+
+  it("still parses the text when no confirmed mandate is given", async () => {
+    const { deps } = setup();
+    const r = await runPurchase(deps, { ownerText: OWNER, need: need() });
+    expect(r.mandate?.weeklyBudgetCents).toBe(40_000);
+    expect(r.outcome).toBe("payment_started");
   });
 });
