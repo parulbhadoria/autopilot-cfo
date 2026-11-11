@@ -7,7 +7,7 @@ Built for the *Build What's Next with PayPal and AI* hackathon.
 | | |
 |---|---|
 | **Hosted demo** (PayPal sandbox, no real money) | https://autopilot-cfo.onrender.com |
-| **Demo video** | https://youtu.be/PS9GWZ2dBLM?si=080oXJjsGO8y1UpG |
+| **Demo video** | https://www.youtube.com/watch?v=iofDYLIcGgg |
 | **License** | MIT (see [LICENSE](LICENSE)) |
 | **Tests** | 354 automated tests (24 policy engine, 237 server, 93 web) |
 
